@@ -37,6 +37,7 @@ tests = [
     ("1mo", "1d"),
     ("1y", "1wk"),
     ("1d", "5m"),
+    ("1y", "1m"),
 ]
 
 for period, interval in tests:
