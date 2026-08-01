@@ -11,7 +11,6 @@ How to run:
 import yfinance as yf
 
 
-# TODO 1.1: change "AAPL" to any other ticker (e.g. "MSFT", "TSLA", "GOOGL")
 ticker = "MSFT"
 
 # Create a Ticker object — this is how yfinance talks to Yahoo
@@ -46,13 +45,10 @@ for period, interval in tests:
     print(f"\nPeriod: {period}, Interval: {interval}")
     print(test_data)
 
-# TODO 1.2: print just the Close prices.
 #   Hint: data["Close"]
 
-# TODO 1.3: print the latest (most recent) close price only.
 #   Hint: data["Close"].iloc[-1]
 
-# TODO 1.4: try different period / interval values.
 #   period options:   1d, 5d, 1mo, 3mo, 1y, 5y, max
 #   interval options: 5m, 30m, 1h, 1d, 1wk, 1mo
 #   (some combinations don't work — find out which!)
