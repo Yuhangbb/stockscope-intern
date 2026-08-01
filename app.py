@@ -44,11 +44,3 @@ for period, interval in tests:
 
     print(f"\nPeriod: {period}, Interval: {interval}")
     print(test_data)
-
-#   Hint: data["Close"]
-
-#   Hint: data["Close"].iloc[-1]
-
-#   period options:   1d, 5d, 1mo, 3mo, 1y, 5y, max
-#   interval options: 5m, 30m, 1h, 1d, 1wk, 1mo
-#   (some combinations don't work — find out which!)
