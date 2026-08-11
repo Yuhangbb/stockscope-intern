@@ -1,12 +1,50 @@
+import json
+import os
+
 import streamlit as st
 import yfinance as yf
 
+WATCHLIST_FILE = "watchlist.json"
+
+def load_watchlist():
+    if os.path.exists(WATCHLIST_FILE):
+        with open(WATCHLIST_FILE, "r") as f:
+            return json.load(f)
+    return ["MSFT", "AAPL", "TSLA"]
+
+def save_watchlist(watchlist):
+    with open(WATCHLIST_FILE, "w") as f:
+        json.dump(watchlist, f)
+
+if "watchlist" not in st.session_state:
+    st.session_state.watchlist = load_watchlist()
+
+st.sidebar.title("Watchlist")
+
+selected_watchlist = st.sidebar.selectbox(
+    "Select Stock",
+    st.session_state.watchlist
+)
+
+new_ticker = st.sidebar.text_input("Add Stock").upper()
+
+if st.sidebar.button("Add"):
+    if new_ticker and new_ticker not in st.session_state.watchlist:
+        st.session_state.watchlist.append(new_ticker)
+        save_watchlist(st.session_state.watchlist)
+        st.rerun()
+
+if st.sidebar.button("Remove"):
+    if selected_watchlist in st.session_state.watchlist and len(st.session_state.watchlist) > 1:
+        st.session_state.watchlist.remove(selected_watchlist)
+        save_watchlist(st.session_state.watchlist)
+        st.rerun()
 
 st.title("📈 My First Stock Page")
 st.write("Hello! This page shows stock prices.")
 
 
-ticker = st.text_input("Ticker", value="MSFT").upper()
+ticker = st.text_input("Ticker", value=selected_watchlist).upper()
 
 timeframes = {
     "1D": ("1d", "5m"),
