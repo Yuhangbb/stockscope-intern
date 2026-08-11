@@ -1,8 +1,10 @@
 import json
 import os
+from datetime import datetime
 
 import streamlit as st
 import yfinance as yf
+from streamlit_autorefresh import st_autorefresh
 
 WATCHLIST_FILE = "watchlist.json"
 
@@ -26,8 +28,34 @@ selected_watchlist = st.sidebar.selectbox(
     st.session_state.watchlist
 )
 
-new_ticker = st.sidebar.text_input("Add Stock").upper()
+search_ticker = st.sidebar.text_input("Search Ticker")
 
+if search_ticker:
+    search_results = yf.Search(search_ticker, max_results=5).quotes
+
+    search_options = []
+
+    for result in search_results:
+        symbol = result.get("symbol", "")
+        name = result.get("shortname", result.get("longname", ""))
+
+        if symbol:
+            search_options.append(f"{symbol} — {name}")
+
+    if search_options:
+        selected_result = st.sidebar.selectbox(
+            "Search Results",
+            search_options
+        )
+
+        selected_symbol = selected_result.split(" — ")[0]
+
+        if st.sidebar.button("Add Search Result"):
+            if selected_symbol not in st.session_state.watchlist:
+                st.session_state.watchlist.append(selected_symbol)
+                save_watchlist(st.session_state.watchlist)
+                st.rerun()
+new_ticker = st.sidebar.text_input("Add Stock").upper()
 if st.sidebar.button("Add"):
     if new_ticker and new_ticker not in st.session_state.watchlist:
         st.session_state.watchlist.append(new_ticker)
@@ -42,6 +70,14 @@ if st.sidebar.button("Remove"):
 
 st.title("📈 My First Stock Page")
 st.write("Hello! This page shows stock prices.")
+
+from datetime import datetime
+
+live_mode = st.checkbox("Live Mode")
+
+if live_mode:
+    st_autorefresh(interval=30000, key="live_refresh")
+    st.write("Last refresh:", datetime.now().strftime("%H:%M:%S"))
 
 
 ticker = st.text_input("Ticker", value=selected_watchlist).upper()
@@ -60,6 +96,24 @@ selected_range = st.selectbox("Range", list(timeframes.keys()))
 period, interval = timeframes[selected_range]
 stock = yf.Ticker(ticker)
 data = stock.history(period=period, interval=interval)
+
+data["MA20"] = data["Close"].rolling(window=20).mean()
+data["MA50"] = data["Close"].rolling(window=50).mean()
+
+show_ma20 = st.checkbox("Show MA20")
+show_ma50 = st.checkbox("Show MA50")
+show_volume = st.checkbox("Show Volume")
+compare_mode = st.checkbox("Compare Mode")
+
+compare_tickers = []
+
+if compare_mode:
+    compare_tickers = st.multiselect(
+        "Compare Tickers",
+        st.session_state.watchlist,
+        default=st.session_state.watchlist[:2],
+        max_selections=6
+    )
 
 st.subheader(f"Stock: {ticker}")
 st.dataframe(data)
@@ -87,4 +141,35 @@ with col2:
 
 with col3:
     st.metric("Period Low", f"${period_low:.2f}")
-st.line_chart(data["Close"])
+chart_data = data[["Close"]].copy()
+
+if show_ma20:
+    chart_data["MA20"] = data["MA20"]
+
+if show_ma50:
+    chart_data["MA50"] = data["MA50"]
+
+st.line_chart(chart_data)
+
+if show_volume:
+    st.subheader("Volume")
+    st.bar_chart(data["Volume"])
+
+if compare_mode and len(compare_tickers) >= 2:
+    compare_data = {}
+
+    for symbol in compare_tickers:
+        compare_stock = yf.Ticker(symbol)
+        compare_history = compare_stock.history(
+            period=period,
+            interval=interval
+        )
+
+        if not compare_history.empty:
+            close = compare_history["Close"]
+            normalized = (close / close.iloc[0] - 1) * 100
+            compare_data[symbol] = normalized
+
+    if compare_data:
+        st.subheader("Normalized Return Comparison (%)")
+        st.line_chart(compare_data)
