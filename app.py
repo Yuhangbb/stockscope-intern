@@ -4,8 +4,10 @@ from datetime import datetime
 
 import streamlit as st
 import yfinance as yf
+import pandas as pd
 import plotly.graph_objects as go
 from streamlit_autorefresh import st_autorefresh
+from transformer_forecast import forecast_prices
 
 WATCHLIST_FILE = "watchlist.json"
 
@@ -63,11 +65,38 @@ if st.sidebar.button("Add"):
         save_watchlist(st.session_state.watchlist)
         st.rerun()
 
+
 if st.sidebar.button("Remove"):
     if selected_watchlist in st.session_state.watchlist and len(st.session_state.watchlist) > 1:
         st.session_state.watchlist.remove(selected_watchlist)
         save_watchlist(st.session_state.watchlist)
         st.rerun()
+
+st.sidebar.divider()
+st.sidebar.subheader("Prediction Lab")
+
+forecast_enabled = st.sidebar.checkbox("Enable Transformer Forecast")
+
+forecast_days = st.sidebar.slider(
+    "Forecast Days",
+    min_value=5,
+    max_value=30,
+    value=10
+)
+
+lookback_window = st.sidebar.slider(
+    "Lookback Window",
+    min_value=10,
+    max_value=60,
+    value=20
+)
+
+training_epochs = st.sidebar.slider(
+    "Training Epochs",
+    min_value=5,
+    max_value=100,
+    value=20
+)
 
 st.title("📈 My First Stock Page")
 st.write("Hello! This page shows stock prices.")
@@ -99,10 +128,36 @@ def fetch_stock_data(ticker, period, interval):
     return stock.history(period=period, interval=interval)
 
 data = fetch_stock_data(ticker, period, interval)
+
 if data.empty:
     st.error(f"No data found for {ticker}. Please check the ticker symbol.")
     st.stop()
 
+@st.cache_data
+def get_forecast(close_prices, forecast_days, lookback_window, training_epochs):
+    return forecast_prices(
+        close_prices,
+        forecast_days=forecast_days,
+        lookback=lookback_window,
+        epochs=training_epochs
+    )
+
+
+forecast_df = None
+forecast_metrics = None
+
+if forecast_enabled:
+    try:
+        forecast_df, forecast_metrics = get_forecast(
+            data["Close"].values,
+            forecast_days,
+            lookback_window,
+            training_epochs
+        )
+    except ValueError as e:
+        st.warning(str(e))
+data["MA20"] = data["Close"].rolling(window=20).mean()
+data["MA50"] = data["Close"].rolling(window=50).mean()
 data["MA20"] = data["Close"].rolling(window=20).mean()
 data["MA50"] = data["Close"].rolling(window=50).mean()
 
@@ -158,6 +213,43 @@ fig.add_trace(
     )
 )
 
+if forecast_enabled and forecast_df is not None:
+    future_dates = pd.bdate_range(
+        start=data.index[-1] + pd.Timedelta(days=1),
+        periods=len(forecast_df)
+    )
+
+    fig.add_trace(
+        go.Scatter(
+            x=future_dates,
+            y=forecast_df["Upper Band"],
+            mode="lines",
+            line=dict(width=0),
+            showlegend=False
+        )
+    )
+
+    fig.add_trace(
+        go.Scatter(
+            x=future_dates,
+            y=forecast_df["Lower Band"],
+            mode="lines",
+            line=dict(width=0),
+            fill="tonexty",
+            name="Forecast Band"
+        )
+    )
+
+    fig.add_trace(
+        go.Scatter(
+            x=future_dates,
+            y=forecast_df["Predicted Close"],
+            mode="lines",
+            name="Forecast",
+            line=dict(dash="dash")
+        )
+    )
+
 if show_ma20:
     fig.add_trace(
         go.Scatter(
@@ -186,6 +278,53 @@ fig.update_layout(
 )
 
 st.plotly_chart(fig, use_container_width=True)
+
+if forecast_enabled and forecast_metrics is not None:
+    final_predicted_price = forecast_metrics["final_predicted_price"]
+    implied_change = (
+        (final_predicted_price / latest) - 1
+    ) * 100
+
+    metric1, metric2, metric3, metric4, metric5 = st.columns(5)
+
+    with metric1:
+        st.metric(
+            "Final Predicted Price",
+            f"${final_predicted_price:.2f}"
+        )
+
+    with metric2:
+        st.metric(
+            "Implied Change",
+            f"{implied_change:+.2f}%"
+        )
+
+    with metric3:
+        st.metric(
+            "Training Samples",
+            forecast_metrics["training_samples"]
+        )
+
+    with metric4:
+        st.metric(
+            "Training Loss",
+            f"{forecast_metrics['training_loss']:.6f}"
+        )
+
+    with metric5:
+        validation_mae = forecast_metrics["validation_mae"]
+
+        if validation_mae is not None:
+            st.metric(
+                "Validation MAE",
+                f"{validation_mae:.6f}"
+            )
+        else:
+            st.metric(
+                "Validation MAE",
+                "N/A"
+            )
+
 if show_volume:
     st.subheader("Volume")
     st.bar_chart(data["Volume"])
